@@ -236,7 +236,7 @@ const RegistrationForm = () => {
         <div className="p-8 space-y-6 text-center">
           <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 inline-block mx-auto relative">
             <img 
-              src={`https://qr.sepay.vn/img?acc=962476LINQ&bank=BIDV&amount=597000&des=${paymentCode}&template=compact`}
+              src={`https://qr.sepay.vn/img?acc=962476LINQ&bank=BIDV&amount=10000&des=${paymentCode}&template=compact`}
               alt="SePay QR Payment"
               className="w-80 h-80 object-contain"
             />
@@ -263,7 +263,7 @@ const RegistrationForm = () => {
           </div>
 
           <div className="pt-4 border-t border-slate-100">
-            <p className="text-sm font-bold text-slate-900">Số tiền: <span className="text-blue-600">597.000 đ</span></p>
+            <p className="text-sm font-bold text-slate-900">Số tiền: <span className="text-blue-600">10.000 đ</span></p>
             <p className="text-[10px] text-slate-400 font-medium mt-2 italic">
               * Sau khi chuyển khoản, hệ thống sẽ tự động nhận diện và chuyển hướng bạn.
             </p>
@@ -395,7 +395,7 @@ const RegistrationForm = () => {
             <Zap size={20} className="text-blue-600" />
             <div>
               <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Giá khóa học</p>
-              <p className="text-xl font-black text-blue-600">597.000 đ</p>
+              <p className="text-xl font-black text-blue-600">10.000 đ</p>
             </div>
           </div>
         </div>
