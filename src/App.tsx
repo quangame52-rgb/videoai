@@ -69,14 +69,15 @@ const RegistrationForm = () => {
     if (isRegistered && paymentStatus === "UNPAID") {
       interval = setInterval(async () => {
         const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
-        if (scriptUrl) {
+        if (scriptUrl && paymentCode) {
           try {
-            // We use a GET request to check status. 
-            // The Apps Script should handle doGet(e) and return { status: "PAID" } or "UNPAID"
-            const response = await fetch(`${scriptUrl}?orderId=${paymentCode}`);
-            const data = await response.json();
-            if (data && data.status === "PAID") {
-              setPaymentStatus("PAID");
+            const separator = scriptUrl.includes("?") ? "&" : "?";
+            const response = await fetch(`${scriptUrl}${separator}orderId=${paymentCode}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.status === "PAID") {
+                setPaymentStatus("PAID");
+              }
             }
           } catch (error) {
             console.error("Error polling payment status:", error);
@@ -126,28 +127,30 @@ const RegistrationForm = () => {
     const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
     if (scriptUrl) {
       try {
-        // Use URLSearchParams for better compatibility with no-cors and Apps Script
         const params = new URLSearchParams();
         params.append("orderId", newOrderCode);
         params.append("name", formData.name);
         params.append("email", formData.email);
         params.append("phone", formData.phone);
         params.append("status", "UNPAID");
+        params.append("action", "register"); // Add an action parameter to distinguish
 
-        await fetch(scriptUrl, {
-          method: "POST",
+        // Using GET request is often more reliable for Apps Script due to CORS/Redirect issues
+        const finalUrl = `${scriptUrl}${scriptUrl.includes("?") ? "&" : "?"}${params.toString()}`;
+        
+        console.log("Sending registration to:", finalUrl);
+        
+        await fetch(finalUrl, {
+          method: "GET",
           mode: "no-cors",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: params.toString(),
         });
-        console.log("Registration data sent to Apps Script");
+        
+        console.log("Registration request sent successfully (no-cors mode)");
       } catch (error) {
         console.error("Error syncing to Google Sheet:", error);
       }
     } else {
-      console.warn("VITE_APPS_SCRIPT_URL is not defined. Data will not be synced to Google Sheets.");
+      console.warn("VITE_APPS_SCRIPT_URL is not defined.");
     }
   };
 
@@ -253,7 +256,25 @@ const RegistrationForm = () => {
             <motion.button 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              onClick={() => setPaymentStatus("MANUAL")}
+              onClick={async () => {
+                setPaymentStatus("MANUAL");
+                const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+                if (scriptUrl && paymentCode) {
+                  try {
+                    const params = new URLSearchParams();
+                    params.append("orderId", paymentCode);
+                    params.append("status", "MANUAL");
+                    params.append("action", "register"); // Reuse register action to update status
+                    const separator = scriptUrl.includes("?") ? "&" : "?";
+                    await fetch(`${scriptUrl}${separator}${params.toString()}`, {
+                      method: "GET",
+                      mode: "no-cors",
+                    });
+                  } catch (e) {
+                    console.error("Error updating manual status:", e);
+                  }
+                }
+              }}
               className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
             >
               <AlertCircle size={16} />
