@@ -126,23 +126,28 @@ const RegistrationForm = () => {
     const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
     if (scriptUrl) {
       try {
+        // Use URLSearchParams for better compatibility with no-cors and Apps Script
+        const params = new URLSearchParams();
+        params.append("orderId", newOrderCode);
+        params.append("name", formData.name);
+        params.append("email", formData.email);
+        params.append("phone", formData.phone);
+        params.append("status", "UNPAID");
+
         await fetch(scriptUrl, {
           method: "POST",
-          mode: "no-cors", // Apps Script requires no-cors for simple redirects
+          mode: "no-cors",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: JSON.stringify({
-            orderId: newOrderCode,
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            status: "UNPAID"
-          }),
+          body: params.toString(),
         });
+        console.log("Registration data sent to Apps Script");
       } catch (error) {
         console.error("Error syncing to Google Sheet:", error);
       }
+    } else {
+      console.warn("VITE_APPS_SCRIPT_URL is not defined. Data will not be synced to Google Sheets.");
     }
   };
 
@@ -268,7 +273,7 @@ const RegistrationForm = () => {
   }
 
   return (
-    <div id="registration-form" className="bg-white rounded-[2rem] shadow-2xl shadow-blue-100 border border-blue-50 overflow-hidden sticky top-28">
+    <div id="registration-form" className="bg-white rounded-[2rem] shadow-2xl shadow-blue-100 border border-blue-50 overflow-hidden lg:sticky lg:top-28">
       <div className="bg-blue-50/50 p-4 flex items-center justify-center gap-8 border-b border-blue-100">
         <div className="flex items-center gap-2 text-blue-600 font-bold text-sm">
           <div className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center">
@@ -566,7 +571,7 @@ export default function App() {
           </div>
 
           {/* Right Sidebar - Sticky Form */}
-          <div className="hidden lg:block">
+          <div className="block">
             <RegistrationForm />
             
             <div className="mt-12 text-center">
@@ -599,7 +604,7 @@ export default function App() {
         </button>
       </div>
 
-      <footer className="bg-slate-50 py-12 border-t border-slate-100 text-center">
+      <footer className="bg-slate-50 pt-12 pb-32 lg:pb-12 border-t border-slate-100 text-center">
         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">© 2024 ĐẦU GỖ • AI.VIBE.CODE</p>
       </footer>
     </div>
