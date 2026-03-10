@@ -65,6 +65,15 @@ const RegistrationForm = () => {
   const ZALO_GROUP_URL = "https://zalo.me/g/vqwndd990";
 
   useEffect(() => {
+    const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+    if (scriptUrl) {
+      console.log("Apps Script URL initialized:", scriptUrl);
+    } else {
+      console.error("VITE_APPS_SCRIPT_URL is missing! Data will not be synced to Google Sheets.");
+    }
+  }, []);
+
+  useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRegistered && paymentStatus === "UNPAID") {
       interval = setInterval(async () => {
@@ -135,17 +144,20 @@ const RegistrationForm = () => {
         params.append("status", "UNPAID");
         params.append("action", "register"); // Add an action parameter to distinguish
 
-        // Using GET request is often more reliable for Apps Script due to CORS/Redirect issues
         const finalUrl = `${scriptUrl}${scriptUrl.includes("?") ? "&" : "?"}${params.toString()}`;
+
+        // Using a "beacon" method (Image) is the most robust way to ensure the GET request hits the server
+        // regardless of CORS or redirect policies.
+        const beacon = new Image();
+        beacon.src = finalUrl;
         
-        console.log("Sending registration to:", finalUrl);
+        console.log("Registration beacon sent to:", finalUrl);
         
-        await fetch(finalUrl, {
+        // Also try fetch as backup
+        fetch(finalUrl, {
           method: "GET",
           mode: "no-cors",
-        });
-        
-        console.log("Registration request sent successfully (no-cors mode)");
+        }).catch(err => console.warn("Fetch backup failed, but beacon was sent.", err));
       } catch (error) {
         console.error("Error syncing to Google Sheet:", error);
       }
@@ -266,10 +278,17 @@ const RegistrationForm = () => {
                     params.append("status", "MANUAL");
                     params.append("action", "register"); // Reuse register action to update status
                     const separator = scriptUrl.includes("?") ? "&" : "?";
-                    await fetch(`${scriptUrl}${separator}${params.toString()}`, {
+                    const finalUrl = `${scriptUrl}${separator}${params.toString()}`;
+                    
+                    // Use beacon for manual sync too
+                    const beacon = new Image();
+                    beacon.src = finalUrl;
+                    console.log("Manual sync beacon sent to:", finalUrl);
+                    
+                    fetch(finalUrl, {
                       method: "GET",
                       mode: "no-cors",
-                    });
+                    }).catch(() => {});
                   } catch (e) {
                     console.error("Error updating manual status:", e);
                   }
