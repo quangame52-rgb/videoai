@@ -33,6 +33,11 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
+// Define global constant type
+declare global {
+  const __APPS_SCRIPT_URL__: string;
+}
+
 const Header = () => {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 py-4">
@@ -65,7 +70,7 @@ const RegistrationForm = () => {
   const ZALO_GROUP_URL = "https://zalo.me/g/vqwndd990";
 
   useEffect(() => {
-    const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+    const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
     if (scriptUrl) {
       console.log("Apps Script URL initialized:", scriptUrl);
     } else {
@@ -77,7 +82,7 @@ const RegistrationForm = () => {
     let interval: NodeJS.Timeout;
     if (isRegistered && paymentStatus === "UNPAID") {
       interval = setInterval(async () => {
-        const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+        const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
         if (scriptUrl && paymentCode) {
           try {
             const separator = scriptUrl.includes("?") ? "&" : "?";
@@ -133,7 +138,7 @@ const RegistrationForm = () => {
     setIsRegistered(true);
 
     // Sync to Google Sheet via Apps Script
-    const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+    const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
     if (scriptUrl) {
       try {
         const params = new URLSearchParams();
@@ -270,7 +275,7 @@ const RegistrationForm = () => {
               animate={{ opacity: 1, y: 0 }}
               onClick={async () => {
                 setPaymentStatus("MANUAL");
-                const scriptUrl = import.meta.env.VITE_APPS_SCRIPT_URL;
+                const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
                 if (scriptUrl && paymentCode) {
                   try {
                     const params = new URLSearchParams();

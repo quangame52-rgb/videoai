@@ -9,7 +9,7 @@ export default defineConfig(({mode}) => {
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'import.meta.env.VITE_APPS_SCRIPT_URL': JSON.stringify(env.VITE_APPS_SCRIPT_URL || env.APP_SCRIPT_URL),
+      '__APPS_SCRIPT_URL__': JSON.stringify(env.VITE_APPS_SCRIPT_URL || env.APP_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbw5b01PFyzhy2wHEqWrG5kqv0Js6ioBM7Htec2VZKEopxtKjcS-2yD3yYkq37zWCELgSA/exec'),
     },
     resolve: {
       alias: {
