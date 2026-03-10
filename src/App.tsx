@@ -67,10 +67,22 @@ const RegistrationForm = () => {
   const [formData, setFormData] = useState({ name: "", phone: "", email: "" });
   const [paymentStatus, setPaymentStatus] = useState<"UNPAID" | "PAID" | "MANUAL">("UNPAID");
   const [showManualButton, setShowManualButton] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const ZALO_GROUP_URL = "https://zalo.me/g/vqwndd990";
 
+  const getScriptUrl = () => {
+    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbx_auPCmmiKOAXw_PL7MKIelkk4J9ohSZyyKuAy6N97pAuER_vKtLZVQh7ZDFKRcPkjtg/exec';
+    let url = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
+    
+    if (url && (url.includes('AKfycbyT8jkAupz6dk4T1sqX6ESwHeE92RLRqMuGcxVYyYOiH7Kjkoe2f3AVVCUfOpo9htZCjg') || url.includes('AKfycb-ReFLomJvVd7AOFEbCOzqhiuABf7L4yN2F2696n0en48uXYADHt7I7Q8pqbFXRHq6'))) {
+      return LATEST_URL;
+    }
+    return url || LATEST_URL;
+  };
+
   useEffect(() => {
-    const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
+    const scriptUrl = getScriptUrl();
     if (scriptUrl) {
       console.log("Apps Script URL initialized:", scriptUrl);
     } else {
@@ -82,22 +94,25 @@ const RegistrationForm = () => {
     let interval: NodeJS.Timeout;
     if (isRegistered && paymentStatus === "UNPAID") {
       interval = setInterval(async () => {
-        const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
-        if (scriptUrl && paymentCode) {
+        if (paymentCode) {
           try {
-            const separator = scriptUrl.includes("?") ? "&" : "?";
-            const response = await fetch(`${scriptUrl}${separator}orderId=${paymentCode}`);
+            console.log(`Polling payment status for ${paymentCode} via proxy...`);
+            const response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
+            
             if (response.ok) {
               const data = await response.json();
-              if (data && data.status === "PAID") {
+              console.log(`[Payment Proxy] Received response for ${paymentCode}:`, data);
+              
+              if (data && data.status && String(data.status).toUpperCase() === "PAID") {
+                console.log("[Payment] SUCCESS! Switching to PAID state.");
                 setPaymentStatus("PAID");
               }
             }
           } catch (error) {
-            console.error("Error polling payment status:", error);
+            console.error("Error polling payment status via proxy:", error);
           }
         }
-      }, 5000); // Poll every 5 seconds
+      }, 5000);
     }
     return () => clearInterval(interval);
   }, [isRegistered, paymentStatus, paymentCode]);
@@ -113,61 +128,83 @@ const RegistrationForm = () => {
   }, [isRegistered, paymentStatus]);
 
   const handleRegister = async () => {
+    if (isSubmitting) return;
+    setError(null);
+    console.log("handleRegister called with:", formData);
+
     if (!formData.name || !formData.phone || !formData.email) {
-      alert("Vui lòng điền đầy đủ thông tin!");
+      setError("Vui lòng điền đầy đủ thông tin!");
       return;
     }
 
     // Validate Email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      alert("Email không đúng định dạng! Vui lòng kiểm tra lại.");
+      setError("Email không đúng định dạng!");
       return;
     }
 
     // Validate Phone format (Vietnam standard: 10 digits starting with 0)
     const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
     if (!phoneRegex.test(formData.phone.replace(/\s/g, ""))) {
-      alert("Số điện thoại không đúng định dạng! Vui lòng nhập số điện thoại Việt Nam (10 số).");
+      setError("Số điện thoại không đúng định dạng (10 số)!");
       return;
     }
 
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    const newOrderCode = `VIDEOAI${randomNum}`;
-    setPaymentCode(newOrderCode);
-    setIsRegistered(true);
+    setIsSubmitting(true);
+    try {
+      const randomNum = Math.floor(100000 + Math.random() * 900000);
+      const newOrderCode = `VIDEOAI${randomNum}`;
+      
+      console.log("Generated order code:", newOrderCode);
+      setPaymentCode(newOrderCode);
 
-    // Sync to Google Sheet via Apps Script
-    const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
-    if (scriptUrl) {
-      try {
-        const params = new URLSearchParams();
-        params.append("orderId", newOrderCode);
-        params.append("name", formData.name);
-        params.append("email", formData.email);
-        params.append("phone", formData.phone);
-        params.append("status", "UNPAID");
-        params.append("action", "register"); // Add an action parameter to distinguish
+      // Sync to Google Sheet via Proxy
+      const params = new URLSearchParams();
+      params.append("orderId", newOrderCode);
+      params.append("name", formData.name);
+      params.append("email", formData.email);
+      params.append("phone", formData.phone);
+      params.append("status", "UNPAID");
+      params.append("action", "register");
 
-        const finalUrl = `${scriptUrl}${scriptUrl.includes("?") ? "&" : "?"}${params.toString()}`;
+      console.log("Initiating registration sync via proxy...");
+      const response = await fetch(`/api/register?${params.toString()}`, {
+        method: "GET",
+      });
+      
+      const text = await response.text();
+      console.log("Proxy sync response:", text);
 
-        // Using a "beacon" method (Image) is the most robust way to ensure the GET request hits the server
-        // regardless of CORS or redirect policies.
-        const beacon = new Image();
-        beacon.src = finalUrl;
+      if (!response.ok || text.includes("Error") || text.includes("Exception") || text.includes("<!DOCTYPE")) {
+        console.error("Proxy sync failed:", text);
         
-        console.log("Registration beacon sent to:", finalUrl);
+        let errorMessage = "Không thể kết nối với Google Sheet qua máy chủ.";
+        try {
+          const errorData = JSON.parse(text);
+          if (errorData.details) {
+            errorMessage = errorData.details;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          // Not JSON, use default or check for common HTML patterns
+          if (text.includes("<title>錯誤</title>") || text.includes("<title>错误</title>")) {
+            errorMessage = "Lỗi quyền truy cập: Google đang chặn yêu cầu. Hãy chắc chắn chọn 'Anyone' khi Deploy và dùng Gmail cá nhân.";
+          }
+        }
         
-        // Also try fetch as backup
-        fetch(finalUrl, {
-          method: "GET",
-          mode: "no-cors",
-        }).catch(err => console.warn("Fetch backup failed, but beacon was sent.", err));
-      } catch (error) {
-        console.error("Error syncing to Google Sheet:", error);
+        setError(errorMessage);
+        setIsSubmitting(false);
+        return;
       }
-    } else {
-      console.warn("VITE_APPS_SCRIPT_URL is not defined.");
+
+      setIsRegistered(true);
+    } catch (err: any) {
+      console.error("Registration error:", err);
+      setError("Có lỗi xảy ra khi kết nối máy chủ: " + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -262,8 +299,28 @@ const RegistrationForm = () => {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100">
+          <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
             <p className="text-sm font-bold text-slate-900">Số tiền: <span className="text-blue-600">10.000 đ</span></p>
+            
+            <button 
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
+                  const data = await response.json();
+                  if (data && data.status && String(data.status).toUpperCase() === "PAID") {
+                    setPaymentStatus("PAID");
+                  } else {
+                    alert("Hệ thống chưa nhận được thanh toán. Vui lòng đợi thêm giây lát hoặc kiểm tra lại nội dung chuyển khoản.");
+                  }
+                } catch (e) {
+                  alert("Có lỗi khi kiểm tra qua máy chủ. Vui lòng thử lại sau.");
+                }
+              }}
+              className="mt-2 text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 hover:bg-blue-100 transition-all"
+            >
+              Kiểm tra ngay
+            </button>
+
             <p className="text-[10px] text-slate-400 font-medium mt-2 italic">
               * Sau khi chuyển khoản, hệ thống sẽ tự động nhận diện và chuyển hướng bạn.
             </p>
@@ -274,28 +331,26 @@ const RegistrationForm = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={async () => {
+                if (paymentStatus === "MANUAL") return;
                 setPaymentStatus("MANUAL");
-                const scriptUrl = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
-                if (scriptUrl && paymentCode) {
+                
+                if (paymentCode) {
                   try {
                     const params = new URLSearchParams();
                     params.append("orderId", paymentCode);
+                    params.append("name", formData.name);
+                    params.append("email", formData.email);
+                    params.append("phone", formData.phone);
                     params.append("status", "MANUAL");
-                    params.append("action", "register"); // Reuse register action to update status
-                    const separator = scriptUrl.includes("?") ? "&" : "?";
-                    const finalUrl = `${scriptUrl}${separator}${params.toString()}`;
+                    params.append("action", "register");
                     
-                    // Use beacon for manual sync too
-                    const beacon = new Image();
-                    beacon.src = finalUrl;
-                    console.log("Manual sync beacon sent to:", finalUrl);
-                    
-                    fetch(finalUrl, {
-                      method: "GET",
-                      mode: "no-cors",
-                    }).catch(() => {});
+                    console.log("Sending manual confirmation via proxy...");
+                    fetch(`/api/register?${params.toString()}`, { method: "GET" })
+                      .then(res => res.text())
+                      .then(text => console.log("Manual sync response via proxy:", text))
+                      .catch(err => console.error("Manual sync error via proxy:", err));
                   } catch (e) {
-                    console.error("Error updating manual status:", e);
+                    console.error("Error updating manual status via proxy:", e);
                   }
                 }
               }}
@@ -347,6 +402,16 @@ const RegistrationForm = () => {
         </div>
 
         <div className="space-y-6 mb-8">
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-2xl text-xs font-bold flex items-center gap-2"
+            >
+              <AlertCircle size={16} />
+              {error}
+            </motion.div>
+          )}
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Họ tên *</label>
             <div className="relative">
@@ -402,11 +467,37 @@ const RegistrationForm = () => {
 
         <button 
           onClick={handleRegister}
-          className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 group active:scale-95"
+          disabled={isSubmitting}
+          className={`w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xl shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 group active:scale-95 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
         >
-          ĐĂNG KÝ HỌC NGAY
-          <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+          {isSubmitting ? "ĐANG XỬ LÝ..." : "ĐĂNG KÝ HỌC NGAY"}
+          {!isSubmitting && <ArrowRight className="group-hover:translate-x-1 transition-transform" />}
         </button>
+
+        {/* Debug Info for User */}
+        <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <p className="text-[10px] text-slate-400 mb-2 uppercase tracking-widest font-black">Công cụ kiểm tra kết nối</p>
+          <div className="flex flex-wrap gap-2">
+            <a 
+              href={getScriptUrl()} 
+              target="_blank" 
+              rel="noreferrer"
+              className="text-[10px] bg-white hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors font-bold shadow-sm"
+            >
+              Mở Link Script Trực Tiếp
+            </a>
+            <button 
+              type="button"
+              onClick={() => alert(`URL hiện tại: ${getScriptUrl()}`)}
+              className="text-[10px] bg-white hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors font-bold shadow-sm"
+            >
+              Xem URL Cấu Hình
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 italic font-medium leading-relaxed">
+            * Nếu mở link trực tiếp mà không thấy chữ "READY", nghĩa là Script chưa được cấu hình đúng.
+          </p>
+        </div>
 
         <p className="text-center text-[10px] text-slate-400 font-bold mt-6 flex items-center justify-center gap-2">
           <Lock size={12} />
