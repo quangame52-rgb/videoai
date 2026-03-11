@@ -96,20 +96,32 @@ const RegistrationForm = () => {
       interval = setInterval(async () => {
         if (paymentCode) {
           try {
-            console.log(`Polling payment status for ${paymentCode} via proxy...`);
-            const response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
+            console.log(`Polling payment status for ${paymentCode}...`);
+            let data;
+            try {
+              const response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
+              if (!response.ok) throw new Error("Proxy failed");
+              data = await response.json();
+            } catch (proxyError) {
+              console.warn("Polling proxy failed, trying direct check...");
+              const directUrl = `${getScriptUrl()}?action=checkStatus&orderId=${paymentCode}&id=${paymentCode}`;
+              const response = await fetch(directUrl);
+              const statusText = await response.text();
+              data = { status: statusText.trim(), raw: statusText };
+            }
             
-            if (response.ok) {
-              const data = await response.json();
-              console.log(`[Payment Proxy] Received response for ${paymentCode}:`, data);
-              
-              if (data && data.status && String(data.status).toUpperCase() === "PAID") {
-                console.log("[Payment] SUCCESS! Switching to PAID state.");
-                setPaymentStatus("PAID");
-              }
+            const isPaid = (status: any) => {
+              if (!status) return false;
+              const s = String(status).trim().toUpperCase().replace(/['"]+/g, '');
+              return s === "PAID" || s === "TRUE" || s === "SUCCESS" || s === "OK" || s === "ĐÃ THANH TOÁN";
+            };
+
+            if (data && isPaid(data.status)) {
+              console.log("[Payment] SUCCESS! Switching to PAID state.");
+              setPaymentStatus("PAID");
             }
           } catch (error) {
-            console.error("Error polling payment status via proxy:", error);
+            console.error("Error polling payment status:", error);
           }
         }
       }, 5000);
@@ -162,6 +174,7 @@ const RegistrationForm = () => {
       // Sync to Google Sheet via Proxy
       const params = new URLSearchParams();
       params.append("orderId", newOrderCode);
+      params.append("id", newOrderCode); // Thêm id để tương thích
       params.append("name", formData.name);
       params.append("email", formData.email);
       params.append("phone", formData.phone);
@@ -338,13 +351,19 @@ const RegistrationForm = () => {
                     data = await response.json();
                   } catch (proxyError) {
                     console.warn("Status proxy failed, trying direct check...");
-                    const directUrl = `${getScriptUrl()}?action=checkStatus&orderId=${paymentCode}`;
+                    const directUrl = `${getScriptUrl()}?action=checkStatus&orderId=${paymentCode}&id=${paymentCode}`;
                     response = await fetch(directUrl);
                     const statusText = await response.text();
                     data = { status: statusText.trim(), raw: statusText };
                   }
 
-                  if (data && data.status && String(data.status).toUpperCase() === "PAID") {
+                  const isPaid = (status: any) => {
+                    if (!status) return false;
+                    const s = String(status).trim().toUpperCase().replace(/['"]+/g, '');
+                    return s === "PAID" || s === "TRUE" || s === "SUCCESS" || s === "OK" || s === "ĐÃ THANH TOÁN";
+                  };
+
+                  if (data && isPaid(data.status)) {
                     setPaymentStatus("PAID");
                   } else {
                     const rawInfo = data.raw ? `\n\nPhản hồi từ Script: ${data.raw}` : "";

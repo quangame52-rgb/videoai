@@ -141,7 +141,7 @@ async function createServer() {
       const separator = scriptUrl.includes("?") ? "&" : "?";
       
       const tryStatus = async (action: string) => {
-        const finalUrl = `${scriptUrl}${separator}orderId=${orderId}&action=${action}`;
+        const finalUrl = `${scriptUrl}${separator}orderId=${orderId}&id=${orderId}&action=${action}`;
         console.log(`[Status Proxy] Fetching: ${finalUrl}`);
         const response = await fetch(finalUrl, { method: 'GET', redirect: 'follow' });
         const text = await response.text();
@@ -151,6 +151,7 @@ async function createServer() {
       const isPaid = (text: string) => {
         if (!text) return false;
         const t = text.trim().toUpperCase();
+        console.log(`[Status Proxy] Checking if "${t}" is PAID...`);
         
         // 1. Exact matches (most common for simple scripts)
         if (t === "PAID" || t === "TRUE" || t === "SUCCESS" || t === "OK" || t === "ĐÃ THANH TOÁN") return true;
@@ -158,6 +159,7 @@ async function createServer() {
         // 2. JSON Handling
         try {
           const json = JSON.parse(text);
+          console.log(`[Status Proxy] Parsed JSON for check:`, json);
           
           // If it's an array (e.g., a row from the sheet), check all elements
           if (Array.isArray(json)) {
