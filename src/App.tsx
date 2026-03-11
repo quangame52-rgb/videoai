@@ -72,12 +72,12 @@ const RegistrationForm = () => {
   const ZALO_GROUP_URL = "https://zalo.me/g/vqwndd990";
 
   const getScriptUrl = () => {
-    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbx_auPCmmiKOAXw_PL7MKIelkk4J9ohSZyyKuAy6N97pAuER_vKtLZVQh7ZDFKRcPkjtg/exec';
+    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbyvHoumM7_wq3MqAYSsjVvgfx9xoeAB0VGfvCJobBMF9jDFMC8VeC6iM-KaIx70ZXib0A/exec';
     let url = typeof __APPS_SCRIPT_URL__ !== 'undefined' ? __APPS_SCRIPT_URL__ : import.meta.env.VITE_APPS_SCRIPT_URL;
     
-    if (url && (url.includes('AKfycbyT8jkAupz6dk4T1sqX6ESwHeE92RLRqMuGcxVYyYOiH7Kjkoe2f3AVVCUfOpo9htZCjg') || url.includes('AKfycb-ReFLomJvVd7AOFEbCOzqhiuABf7L4yN2F2696n0en48uXYADHt7I7Q8pqbFXRHq6'))) {
-      return LATEST_URL;
-    }
+    // Always use the user-provided URL if it looks like a valid script URL
+    if (LATEST_URL) return LATEST_URL;
+    
     return url || LATEST_URL;
   };
 
@@ -273,7 +273,7 @@ const RegistrationForm = () => {
         <div className="p-8 space-y-6 text-center">
           <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 inline-block mx-auto relative">
             <img 
-              src={`https://qr.sepay.vn/img?acc=962476LINQ&bank=BIDV&amount=10000&des=${paymentCode}&template=compact`}
+              src={`https://qr.sepay.vn/img?acc=962476LINQ&bank=BIDV&amount=597000&des=${paymentCode}&template=compact`}
               alt="SePay QR Payment"
               className="w-80 h-80 object-contain"
             />
@@ -300,7 +300,7 @@ const RegistrationForm = () => {
           </div>
 
           <div className="pt-4 border-t border-slate-100 flex flex-col gap-3">
-            <p className="text-sm font-bold text-slate-900">Số tiền: <span className="text-blue-600">10.000 đ</span></p>
+            <p className="text-sm font-bold text-slate-900">Số tiền: <span className="text-blue-600">597.000 đ</span></p>
             
             <button 
               onClick={async () => {
@@ -310,7 +310,8 @@ const RegistrationForm = () => {
                   if (data && data.status && String(data.status).toUpperCase() === "PAID") {
                     setPaymentStatus("PAID");
                   } else {
-                    alert("Hệ thống chưa nhận được thanh toán. Vui lòng đợi thêm giây lát hoặc kiểm tra lại nội dung chuyển khoản.");
+                    const rawInfo = data.raw ? `\n\nPhản hồi từ Script: ${data.raw}` : "";
+                    alert(`Hệ thống chưa nhận được trạng thái PAID. Vui lòng đợi thêm giây lát hoặc kiểm tra lại nội dung chuyển khoản.${rawInfo}`);
                   }
                 } catch (e) {
                   alert("Có lỗi khi kiểm tra qua máy chủ. Vui lòng thử lại sau.");
@@ -460,7 +461,7 @@ const RegistrationForm = () => {
             <Zap size={20} className="text-blue-600" />
             <div>
               <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Giá khóa học</p>
-              <p className="text-xl font-black text-blue-600">10.000 đ</p>
+              <p className="text-xl font-black text-blue-600">597.000 đ</p>
             </div>
           </div>
         </div>

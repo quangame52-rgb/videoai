@@ -18,13 +18,8 @@ async function startServer() {
 
   // Proxy for Google Apps Script registration
   app.all("/api/register", async (req, res) => {
-    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbx_auPCmmiKOAXw_PL7MKIelkk4J9ohSZyyKuAy6N97pAuER_vKtLZVQh7ZDFKRcPkjtg/exec';
-    let scriptUrl = process.env.VITE_APPS_SCRIPT_URL || LATEST_URL;
-    
-    // Force override if it's the known old/broken URL
-    if (scriptUrl.includes('AKfycbyT8jkAupz6dk4T1sqX6ESwHeE92RLRqMuGcxVYyYOiH7Kjkoe2f3AVVCUfOpo9htZCjg')) {
-      scriptUrl = LATEST_URL;
-    }
+    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbyvHoumM7_wq3MqAYSsjVvgfx9xoeAB0VGfvCJobBMF9jDFMC8VeC6iM-KaIx70ZXib0A/exec';
+    let scriptUrl = LATEST_URL;
     
     console.log(`[Registration Proxy] Using Script URL: ${scriptUrl}`);
     
@@ -135,13 +130,8 @@ async function startServer() {
   // Proxy for Google Apps Script to avoid CORS
   app.get("/api/payment-status", async (req, res) => {
     const { orderId } = req.query;
-    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbx_auPCmmiKOAXw_PL7MKIelkk4J9ohSZyyKuAy6N97pAuER_vKtLZVQh7ZDFKRcPkjtg/exec';
-    let scriptUrl = process.env.VITE_APPS_SCRIPT_URL || LATEST_URL;
-
-    // Force override if it's the known old/broken URL
-    if (scriptUrl.includes('AKfycbyT8jkAupz6dk4T1sqX6ESwHeE92RLRqMuGcxVYyYOiH7Kjkoe2f3AVVCUfOpo9htZCjg')) {
-      scriptUrl = LATEST_URL;
-    }
+    const LATEST_URL = 'https://script.google.com/macros/s/AKfycbyvHoumM7_wq3MqAYSsjVvgfx9xoeAB0VGfvCJobBMF9jDFMC8VeC6iM-KaIx70ZXib0A/exec';
+    let scriptUrl = LATEST_URL;
 
     if (!orderId) {
       return res.status(400).json({ error: "Missing orderId" });
@@ -159,8 +149,48 @@ async function startServer() {
       };
 
       const isPaid = (text: string) => {
+        if (!text) return false;
         const t = text.trim().toUpperCase();
-        return t === "PAID" || t === "ĐÃ THANH TOÁN" || t.includes("\"PAID\"") || t.includes(":PAID") || t.includes("PAID");
+        
+        // 1. Exact matches (most common for simple scripts)
+        if (t === "PAID" || t === "TRUE" || t === "SUCCESS" || t === "OK" || t === "ĐÃ THANH TOÁN") return true;
+        
+        // 2. JSON Handling
+        try {
+          const json = JSON.parse(text);
+          
+          // If it's an array (e.g., a row from the sheet), check all elements
+          if (Array.isArray(json)) {
+            return json.some(item => {
+              const s = String(item).toUpperCase();
+              return s === "PAID" || s === "ĐÃ THANH TOÁN" || s === "SUCCESS";
+            });
+          }
+          
+          // If it's an object, check common field names
+          if (typeof json === 'object' && json !== null) {
+            const fields = ['status', 'result', 'payment', 'paid', 'data', 'value', 'msg', 'message'];
+            for (const field of fields) {
+              const val = String(json[field] || "").toUpperCase();
+              if (val === "PAID" || val === "SUCCESS" || val === "TRUE" || val === "ĐÃ THANH TOÁN") return true;
+            }
+            
+            // Deep search: check if any string value in the object is "PAID"
+            return Object.values(json).some(v => String(v).toUpperCase() === "PAID");
+          }
+        } catch (e) {
+          // Not valid JSON, continue to string checks
+        }
+        
+        // 3. String inclusion (be careful with UNPAID)
+        // If "PAID" exists but "UNPAID" doesn't, it's likely a success message
+        if (t.includes("PAID") && !t.includes("UNPAID")) return true;
+        if (t.includes("ĐÃ THANH TOÁN") || t.includes("THANH TOÁN THÀNH CÔNG")) return true;
+        
+        // 4. Handle quoted strings like "PAID"
+        if (t.replace(/['"]+/g, '') === "PAID") return true;
+
+        return false;
       };
 
       let result = await tryStatus('checkStatus');
@@ -171,11 +201,12 @@ async function startServer() {
       }
 
       if (isPaid(result.text)) {
-        console.log(`[Status Proxy] Order ${orderId} is PAID`);
+        console.log(`[Status Proxy] Order ${orderId} is confirmed as PAID. Response: ${result.text.substring(0, 50)}`);
         return res.json({ status: "PAID" });
       }
 
-      res.json({ status: "UNPAID", raw: result.text.substring(0, 100) });
+      console.log(`[Status Proxy] Order ${orderId} is still UNPAID. Response: ${result.text.substring(0, 100)}`);
+      res.json({ status: "UNPAID", raw: result.text.substring(0, 200) });
     } catch (error: any) {
       console.error("[Status Proxy] Error:", error.message);
       res.status(500).json({ error: "Lỗi Proxy: " + error.message });
