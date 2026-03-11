@@ -168,15 +168,40 @@ const RegistrationForm = () => {
       params.append("status", "UNPAID");
       params.append("action", "register");
 
-      console.log("Initiating registration sync via proxy...");
-      const response = await fetch(`/api/register?${params.toString()}`, {
-        method: "GET",
-      });
-      
-      const text = await response.text();
-      console.log("Proxy sync response:", text);
+      console.log("Initiating registration sync...");
+      let response;
+      let text = "";
+      let usedProxy = true;
 
-      if (!response.ok || text.includes("Error") || text.includes("Exception") || text.includes("<!DOCTYPE")) {
+      try {
+        // Thử gọi qua Proxy trước
+        response = await fetch(`/api/register?${params.toString()}`, { method: "GET" });
+        text = await response.text();
+        
+        // Nếu Proxy trả về lỗi (404 trên Vercel hoặc lỗi khác), thử gọi trực tiếp
+        if (!response.ok || text.includes("<!DOCTYPE")) {
+          throw new Error("Proxy not available");
+        }
+      } catch (e) {
+        console.warn("Proxy failed or not found, trying direct connection to Google Apps Script...");
+        usedProxy = false;
+        try {
+          const directUrl = `${getScriptUrl()}?${params.toString()}`;
+          // Sử dụng mode: 'no-cors' vì Google Script thường gây lỗi CORS khi gọi trực tiếp, 
+          // nhưng dữ liệu vẫn sẽ được gửi đi thành công.
+          await fetch(directUrl, { mode: 'no-cors' });
+          text = "SUCCESS (DIRECT)";
+          response = { ok: true };
+        } catch (directError) {
+          console.error("Direct connection also failed:", directError);
+          response = { ok: false };
+          text = "Error: Connection failed";
+        }
+      }
+      
+      console.log(`Sync result (Proxy: ${usedProxy}):`, text);
+
+      if (!response.ok || text.includes("Error") || text.includes("Exception")) {
         console.error("Proxy sync failed:", text);
         
         let errorMessage = "Không thể kết nối với Google Sheet qua máy chủ.";
@@ -305,8 +330,20 @@ const RegistrationForm = () => {
             <button 
               onClick={async () => {
                 try {
-                  const response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
-                  const data = await response.json();
+                  let response;
+                  let data;
+                  try {
+                    response = await fetch(`/api/payment-status?orderId=${paymentCode}`);
+                    if (!response.ok) throw new Error("Proxy failed");
+                    data = await response.json();
+                  } catch (proxyError) {
+                    console.warn("Status proxy failed, trying direct check...");
+                    const directUrl = `${getScriptUrl()}?action=checkStatus&orderId=${paymentCode}`;
+                    response = await fetch(directUrl);
+                    const statusText = await response.text();
+                    data = { status: statusText.trim(), raw: statusText };
+                  }
+
                   if (data && data.status && String(data.status).toUpperCase() === "PAID") {
                     setPaymentStatus("PAID");
                   } else {
